@@ -1,0 +1,45 @@
+on:
+  push:
+    paths:
+      - '.github/workflows/lacework-prosast-scheduled.yaml'
+  schedule:
+    - cron: '00 7 * * *'
+
+name: Lacework ProSAST (Scheduled)
+jobs:
+  run-analysis:
+    runs-on: ubuntu-22.04
+    name: Run analysis
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Lacework CLI
+        run: curl https://raw.githubusercontent.com/lacework/go-sdk/main/cli/install.sh | bash
+
+      - name: Configure Lacework CLI
+        run: lacework --noninteractive --account ${{ secrets.LW_ACCOUNT_CAT }} --api_key ${{ secrets.LW_API_KEY_CAT }} --api_secret ${{ secrets.LW_API_SECRET_CAT }} configure
+
+      - name: Install SAST component
+        run: lacework component install sast
+
+      - name: Check SAST version
+        run: lacework sast version
+
+      - name: Set up Java to Temurin 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Compile project
+        run: mvn package
+
+      - name: Run analysis
+        run: lacework sast scan --output report.sarif --classpath target/webgoat-2023.9-SNAPSHOT.jar
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: report.sarif
+          category: Lacework SCA
